@@ -1,0 +1,186 @@
+<template>
+    <view class="container" id="index">
+        <head :sourcePages.sync="pagesPathName" :pagesTitle.sync="pagesTitle" />
+        <!-- <view class="swiper-container">  
+			<swiperItemEle :swiperItemObj.sync="swiperItemObj"></swiperItemEle>
+        </view> -->
+		<!-- <mp-video-swiper 
+			class="video-swiper" 
+			video-list="{{videoList}}" 
+			bindplay="onPlay"
+			bindpause="onPause"
+			bindtimeupdate="onTimeUpdate"
+			bindended="onEnded"
+			binderror="onError"
+			bindwaiting="onWaiting"
+			bindprogress="onProgress"
+			bindloadedmetadata="onLoadedMetaData"
+			></mp-video-swiper> -->
+	<!-- <mp-dialog title="test" show="{{true}}"
+		 bindbuttontap="tapDialogButton" buttons="{{[{text: '取消'}, {text: '确认'}]}}">
+		<view>test content</view>
+	</mp-dialog> -->
+		<view @tap="signatureBtn">跳转signature</view>
+		<view wx:if="{{signImage}}" class="img-box">
+			<image @tap="signatureBtn"  src="{{signImage}}" mode="widthFix"/>
+		</view>
+		<view @tap="saveImg">保存图片</view>
+    </view>
+</template>
+
+<script>
+	import wepy from 'wepy'
+	import swiperItemEle from '../components/swiper-item';
+	import appConfig from '../common/app_config'
+
+    import head from '../components/head';
+	export default class Index extends wepy.page { 
+		config = {
+		}
+		data = { 
+            pageShow: false,
+            pagesPathName: 'mallIndex',
+            pagesTitle: '巧虎商城',
+			swiperItemObj:{
+				swiperType:0,
+				swiperCurrent:1,  //默认从1开始
+				swiperHeight:'340',
+				previousMargin:'0',
+				nextMargin:'0',
+				indicator:{ dots:false,color:'#fff',activeColor:"red" },
+				navigation:{ show:true, clickble:true },
+				pagination:{ show:false, clickble:false },
+				arrList:[{
+					qr_mode:1,
+					// img_url:"https://190122fg0365demo.eintone.com//upload/images/1698b9a83d35df601c9bacaab3f84bc8.jpg",
+					img_url:"https://190122fg0365demo.eintone.com/microappshop/images/4qfUHeX4by4FKXCNvEwj.jpg"
+				},{
+					qr_mode:2,
+					// img_url:"https://190122fg0365demo.eintone.com//upload/images/08d4bb7eaa1b3ad6610be6a007519e1d.jpg"
+					img_url:"https://190122fg0365demo.eintone.com/microappshop/images/4qfUHeX4by4FKXCNvEwj.jpg"
+				}]
+			},
+			urls : [
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/2dbe7eca5285890794073052281/447nYOh5H2IA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/302875785285890794073167099/HhGL7OJObiYA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/30287db75285890794073167278/WVQpwkgnb9EA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/320e66af5285890794073202694/8ksYlGUevogA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/30010ead5285890794073141537/DGAx2EgLMEYA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/320ed9255285890794073203062/JyqT3zzDH4MA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/320ee16a5285890794073203247/okwtzftAVuwA.mp4',
+				'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/2fcc59275285890794073114126/ySa5LZ3k4EcA.mp4'
+			],
+			videoList:[{
+				id:0,
+				url:'http://1252076676.vod2.myqcloud.com/d7eee309vodgzp1252076676/2dbe7eca5285890794073052281/447nYOh5H2IA.mp4',
+
+			}],
+			signImage:''
+		}
+		components = {
+			"swiperItemEle":swiperItemEle,
+			head
+		}
+
+		methods = {
+			onPlay(e) {},
+
+			onPause(e) {
+				 console.log('pause', e.detail.activeId)
+			},
+			tapDialogButton(){
+
+			},
+			onEnded(e) {},
+
+			onError(e) {},
+
+			onWaiting(e) {},
+
+			onTimeUpdate(e) {},
+
+			onProgress(e) {},
+
+			onLoadedMetaData(e) {
+				console.log('LoadedMetaData', e)
+			},
+			signatureBtn(){
+				wx.navigateTo({
+					url:'/pages/signature'
+				})
+			},
+			saveImg(){
+				this.saveImageTap()
+			}
+		}
+		saveImageTap(){
+            var _this = this;
+            wx.getImageInfo({
+                src: this.signImage,
+                success (res) {
+                    // 保存图片
+                    wx.saveImageToPhotosAlbum({
+                        filePath: res.path,
+                        success: (res)=> {
+                            wx.showToast({
+                                title: '保存相册成功！',
+                                icon: 'none',
+                                duration: 2000
+                            })
+                        },
+                        fail: (res)=> {
+                            console.log(res)
+                            if(  res.errMsg.indexOf('deny')!=-1||res.errMsg.indexOf('denied')!=-1 ){
+                                wx.showToast({
+                                    title: '保存相册失败，请设置权限！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                                _this.$broadcast('settingInit', 'scope.writePhotosAlbum')
+                            }else{
+                                wx.showToast({
+                                    title: '保存相册失败，请重试！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                            }
+                        }
+                    })
+                }
+            })
+        }
+		onLoad(){
+			const videoList = this.urls.map((url, index) => ({ 
+					id: index + 1,
+					url:url
+				})
+			)
+			console.log(videoList)
+			// this.videoList= videoList;
+			this.$apply()
+		}
+		onShow(){
+			this.signImage = appConfig.signImage;
+			this.$apply()
+			console.log(appConfig.signImage)
+		}
+	}
+</script>
+
+<style lang="less">
+
+page{
+    background-color: #FFFFFF;
+    height: 100%;
+}
+#index{
+	width: 100%;height: 100%;
+	.img-box{
+		width: 680rpx;margin:20rpx auto;
+		border:2rpx dashed red;
+		image{
+			display: block;width: 100%;
+		}
+	}
+}
+</style>

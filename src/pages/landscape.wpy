@@ -1,0 +1,516 @@
+<template>
+    <view class="container" id="test">
+        <view class="canvas-box">
+            <canvas class='firstCanvas' canvas-id="firstCanvas" disable-scroll='true' 
+                bindtouchmove='move' bindtouchstart='start'
+                bindtouchend='end' bindtouchcancel='cancel'
+                bindlongtap='tap' binderror='error'>
+            </canvas>
+            <view class="clear-btn" @tap="clearClick"></view>
+            <view class="create-box">
+                <view class="close-create-img" @tap="closeClick"></view>
+                <view class="is-create-img" @tap="saveClick"></view>
+            </view>
+        </view>
+        <setting />
+    </view>
+</template>
+
+<script>
+    import wepy from 'wepy';
+    import setting from '../components/setting';
+    // 配置
+    export default class Test extends wepy.page { 
+        data = {
+            signImage:'',
+            touchs:[],
+            content:null,
+                    
+            canvasName: 'handWriting',
+            ctx: '',
+            canvasWidth: 0,
+            canvasHeight: 0,
+            transparent: 1, // 透明度
+            selectColor: 'black',
+            lineColor: '#1A1A1A', // 颜色
+            lineSize: 1.5,  // 笔记倍数
+            lineMin: 0.5,   // 最小笔画半径
+            lineMax: 4,     // 最大笔画半径
+            pressure: 1,     // 默认压力
+            smoothness: 60,  //顺滑度，用60的距离来计算速度
+            currentPoint: {},
+            currentLine: [],  // 当前线条
+            firstTouch: true, // 第一次触发
+            radius: 1, //画圆的半径
+            cutArea: { top: 0, right: 0, bottom: 0, left: 0 }, //裁剪区域
+            bethelPoint: [],  //保存所有线条 生成的贝塞尔点；
+            lastPoint: 0,
+            chirography: [], //笔迹
+            currentChirography: {}, //当前笔迹
+            linePrack: [] //划线轨迹 , 生成线条的实际点
+        } 
+         config ={
+            "pageOrientation": "landscape",
+            "resizable": true
+        }     
+        components = {
+        }
+        events={} 
+        methods = {
+            // 画布的触摸移动开始手势响应
+            start (event) {
+                if (event.type != 'touchstart') return false;
+                // console.log("触摸开始" + event.changedTouches[0].x)
+                // console.log("触摸开始" + event.changedTouches[0].y)
+                //获取触摸开始的 x,y
+                
+                let ctx = this.content;
+                ctx.setFillStyle(this.lineColor);  // 初始线条设置颜色
+                ctx.setGlobalAlpha(this.transparent);  // 设置半透明
+
+                let point = { x: event.changedTouches[0].x, y: event.changedTouches[0].y }
+
+                
+                let currentLine = this.currentLine;
+                currentLine.unshift({
+                        time: new Date().getTime(),
+                        dis: 0,
+                        x: point.x,
+                        y: point.y
+                    })
+                this.currentPoint = currentLine
+                this.$apply()
+                this.touchs.push(point);
+                if(this.firstTouch){
+                    this.cutArea={ 
+                        top: this.currentPoint.y, 
+                        right: this.currentPoint.x, 
+                        bottom: this.currentPoint.y, 
+                        left: this.currentPoint.x 
+                    }
+                    this.firstTouch = false;
+                    this.$apply()
+                }
+                this.pointToLine(currentLine);
+            },
+            // 画布的触摸移动手势响应
+            move(e) {
+                if (e.type != 'touchmove') return false;
+                if (e.cancelable) {
+                    // 判断默认行为是否已经被禁用
+                    if (!e.defaultPrevented) {
+                        e.preventDefault();
+                    }
+                }
+                let point = {x: e.touches[0].x, y: e.touches[0].y}
+                //测试裁剪
+                if (point.y < this.cutArea.top) {
+                this.cutArea.top = point.y;
+                }
+                if (point.y < 0) this.cutArea.top = 0;
+
+                if (point.x > this.cutArea.right) {
+                this.cutArea.right = point.x;
+                }
+                if (this.canvasWidth - point.x <= 0) {
+                this.cutArea.right = this.canvasWidth;
+                }
+                if (point.y > this.cutArea.bottom) {
+                this.cutArea.bottom = point.y;
+                }
+                if (this.canvasHeight - point.y <= 0) {
+                this.cutArea.bottom = this.canvasHeight;
+                }
+                if (point.x < this.cutArea.left) {
+                this.cutArea.left = point.x;
+                }
+                if (point.x < 0) this.cutArea.left = 0;
+
+                
+                this.lastPoint= this.currentPoint,
+                this.currentPoint=point
+
+                
+                let currentLine = this.currentLine;
+                console.log('currentLine初始',currentLine)
+                currentLine.unshift({
+                        time: new Date().getTime(),
+                        dis: this.distance(this.currentPoint, this.lastPoint),
+                        x: point.x,
+                        y: point.y
+                    })
+
+                this.pointToLine(currentLine);
+                return
+                this.touchs.push(point)
+                if(this.touchs.length >= 2) {
+                    this.createDraw()
+                }
+            },
+            // 画布的触摸移动结束手势响应
+            end(e){
+                console.log("触摸结束"+e)
+                
+                if (e.type != 'touchend') return 0;
+                let point = {
+                    x: e.changedTouches[0].x,
+                    y: e.changedTouches[0].y
+                }
+
+                this.lastPoint= this.currentPoint,
+                this.currentPoint=point
+                let currentLine = this.currentLine
+                currentLine.unshift({
+                        time: new Date().getTime(),
+                        dis: this.distance(this.currentPoint, this.lastPoint),
+                        x: point.x,
+                        y: point.y
+                    })
+                if (currentLine.length > 2) {
+                    var info = (currentLine[0].time - currentLine[currentLine.length - 1].time) / currentLine.length;
+                    //$("#info").text(info.toFixed(2));
+                }
+                //一笔结束，保存笔迹的坐标点，清空，当前笔迹
+                //增加判断是否在手写区域；
+                this.pointToLine(currentLine);
+                var currentChirography = {
+                    lineSize: this.lineSize,
+                    lineColor: this.lineColor
+                };
+                var chirography = this.chirography
+                chirography.unshift(currentChirography);
+                this.chirography = chirography;
+                var linePrack = this.linePrack
+                    linePrack.unshift(this.currentLine);
+                this.linePrack=linePrack
+                this.currentLine= []
+                this.$apply()
+                return
+                //清空轨迹数组
+                for (let i = 0 ;i < this.touchs.length;i++ ){
+                     wx.showToast({
+                        title: '触摸结束'+this.touchs.length,
+                        icon: 'none',
+                        duration: 1000
+                    })
+                    this.touchs=[]
+                    this.$apply()
+                }
+            },
+            // 画布的触摸取消响应
+            cancel(e) {
+                console.log("触摸取消"+e)
+                this.touchs=[]
+                wx.showToast({
+                    title: '触摸取消',
+                    icon: 'none',
+                    duration: 1000
+                })
+            },
+
+            // 画布的长按手势响应
+            tap(e) {
+                 wx.showToast({
+                    title: '长按手势',
+                    icon: 'none',
+                    duration: 1000
+                })
+                console.log("长按手势"+e)
+            },
+            error(e){
+                wx.showToast({
+                    title: '画布触摸错误',
+                    icon: 'none',
+                    duration: 1000
+                })
+                console.log("画布触摸错误"+e)
+            },
+            //清除操作
+            clearClick() {
+                var _this=this
+                wx.getSystemInfo({
+                    success (res) {
+                        console.log(res.model)
+                        console.log(res.pixelRatio)
+                        console.log(res.windowWidth)
+                        console.log(res.windowHeight)
+                        console.log(res.language)
+                        console.log(res.version)
+                        console.log(res.platform)
+                        
+                        _this.content.clearRect(0,0,res.windowWidth,res.windowHeight)
+                        _this.content.draw(true)
+                    }
+                })
+                //清除画布
+                // this.content.clearRect(0,0,this.content._context.canvas.width,this.content._context.canvas.height)
+                // this.content.draw(true)
+            },
+            //保存图片
+            saveClick() {
+                var that = this
+                wx.canvasToTempFilePath({
+                    canvasId: 'firstCanvas',
+                    success:function(res) {
+                    //打印图片路径
+                        console.log(res.tempFilePath)
+                        //设置保存的图片
+                        that.signImage = res.tempFilePath;
+                        that.$apply()
+                        that.saveImageTap()
+                    }
+                })
+            }
+        }
+         //求两点之间距离
+        distance (a, b) {
+            let x = b.x - a.x;
+            let y = b.y - a.y;
+            return Math.sqrt(x * x + y * y);
+        }
+         //画两点之间的线条；参数为:line，会绘制最近的开始的两个点；
+        pointToLine (line) {
+            this.calcBethelLine(line);
+            return;
+        }
+         //计算插值的方式；
+        calcBethelLine (line) {
+            console.log('line',line)
+            if (line.length <= 1) {
+                line[0].r = this.radius;
+                return;
+            }
+            let x0, x1, x2, y0, y1, y2, r0, r1, r2, len, lastRadius, dis = 0, time = 0, curveValue = 0.5;
+            if (line.length <= 2) {
+                x0 = line[1].x
+                y0 = line[1].y
+                x2 = line[1].x + (line[0].x - line[1].x) * curveValue;
+                y2 = line[1].y + (line[0].y - line[1].y) * curveValue;
+                //x2 = line[1].x;
+                //y2 = line[1].y;
+                x1 = x0 + (x2 - x0) * curveValue;
+                y1 = y0 + (y2 - y0) * curveValue;;
+
+            } else {
+                x0 = line[2].x + (line[1].x - line[2].x) * curveValue;
+                y0 = line[2].y + (line[1].y - line[2].y) * curveValue;
+                x1 = line[1].x;
+                y1 = line[1].y;
+                x2 = x1 + (line[0].x - x1) * curveValue;
+                y2 = y1 + (line[0].y - y1) * curveValue;
+            }
+            //从计算公式看，三个点分别是(x0,y0),(x1,y1),(x2,y2) ；(x1,y1)这个是控制点，控制点不会落在曲线上；实际上，这个点还会手写获取的实际点，却落在曲线上
+            len = this.distance({ x: x2, y: y2 }, { x: x0, y: y0 });
+            lastRadius = this.radius;
+            for (let n = 0; n < line.length - 1; n++) {
+                dis += line[n].dis;
+                time += line[n].time - line[n + 1].time;
+                if (dis > this.smoothness) break;
+            }
+            
+            this.radius = Math.min(time / len * this.pressure + this.lineMin, this.lineMax) * this.lineSize;
+            this.$apply()
+            line[0].r = this.radius;
+            //计算笔迹半径；
+            if (line.length <= 2) {
+                r0 = (lastRadius + this.radius) / 2;
+                r1 = r0;
+                r2 = r1;
+                //return;
+            } else {
+                r0 = (line[2].r + line[1].r) / 2;
+                r1 = line[1].r;
+                r2 = (line[1].r + line[0].r) / 2;
+            }
+            let n = 5;
+            let point = [];
+            for (let i = 0; i < n; i++) {
+                let t = i / (n - 1);
+                let x = (1 - t) * (1 - t) * x0 + 2 * t * (1 - t) * x1 + t * t * x2;
+                let y = (1 - t) * (1 - t) * y0 + 2 * t * (1 - t) * y1 + t * t * y2;
+                let r = lastRadius + (this.radius - lastRadius) / n * i;
+                point.push({ x: x, y: y, r: r });
+                if (point.length == 3) {
+                    let a = this.ctaCalc(point[0].x, point[0].y, point[0].r, point[1].x, point[1].y, point[1].r, point[2].x, point[2].y, point[2].r);
+                    a[0].color = this.lineColor;
+                    // let bethelPoint = this.bethelPoint;
+                    // console.log(a)
+                    // console.log(this.bethelPoint)
+                    // bethelPoint = bethelPoint.push(a);
+                    this.bethelDraw(a, 1);
+                    point = [{ x: x, y: y, r: r }];
+                }
+            }
+            this.currentLine = line;
+            this.$apply()
+        }
+         ctaCalc (x0, y0, r0, x1, y1, r1, x2, y2, r2) {
+            let a = [], vx01, vy01, norm, n_x0, n_y0, vx21, vy21, n_x2, n_y2;
+            vx01 = x1 - x0;
+            vy01 = y1 - y0;
+            norm = Math.sqrt(vx01 * vx01 + vy01 * vy01 + 0.0001) * 2;
+            vx01 = vx01 / norm * r0;
+            vy01 = vy01 / norm * r0;
+            n_x0 = vy01;
+            n_y0 = -vx01;
+            vx21 = x1 - x2;
+            vy21 = y1 - y2;
+            norm = Math.sqrt(vx21 * vx21 + vy21 * vy21 + 0.0001) * 2;
+            vx21 = vx21 / norm * r2;
+            vy21 = vy21 / norm * r2;
+            n_x2 = -vy21;
+            n_y2 = vx21;
+            a.push({ mx: x0 + n_x0, my: y0 + n_y0, color: "#1A1A1A" });
+            a.push({ c1x: x1 + n_x0, c1y: y1 + n_y0, c2x: x1 + n_x2, c2y: y1 + n_y2, ex: x2 + n_x2, ey: y2 + n_y2 });
+            a.push({ c1x: x2 + n_x2 - vx21, c1y: y2 + n_y2 - vy21, c2x: x2 - n_x2 - vx21, c2y: y2 - n_y2 - vy21, ex: x2 - n_x2, ey: y2 - n_y2 });
+            a.push({ c1x: x1 - n_x2, c1y: y1 - n_y2, c2x: x1 - n_x0, c2y: y1 - n_y0, ex: x0 - n_x0, ey: y0 - n_y0 });
+            a.push({ c1x: x0 - n_x0 - vx01, c1y: y0 - n_y0 - vy01, c2x: x0 + n_x0 - vx01, c2y: y0 + n_y0 - vy01, ex: x0 + n_x0, ey: y0 + n_y0 });
+            a[0].mx = a[0].mx.toFixed(1);
+            a[0].mx = parseFloat(a[0].mx);
+            a[0].my = a[0].my.toFixed(1);
+            a[0].my = parseFloat(a[0].my);
+            for (let i = 1; i < a.length; i++) {
+            a[i].c1x = a[i].c1x.toFixed(1);
+            a[i].c1x = parseFloat(a[i].c1x);
+            a[i].c1y = a[i].c1y.toFixed(1);
+            a[i].c1y = parseFloat(a[i].c1y);
+            a[i].c2x = a[i].c2x.toFixed(1);
+            a[i].c2x = parseFloat(a[i].c2x);
+            a[i].c2y = a[i].c2y.toFixed(1);
+            a[i].c2y = parseFloat(a[i].c2y);
+            a[i].ex = a[i].ex.toFixed(1);
+            a[i].ex = parseFloat(a[i].ex);
+            a[i].ey = a[i].ey.toFixed(1);
+            a[i].ey = parseFloat(a[i].ey);
+            }
+            return a;
+        }
+         bethelDraw (point, is_fill, color) {
+            let ctx = this.content;
+            ctx.beginPath();
+            ctx.moveTo(point[0].mx, point[0].my);
+            if (undefined != color) {
+                ctx.setFillStyle(color);
+                ctx.setStrokeStyle(color);
+            } else {
+                ctx.setFillStyle(point[0].color);
+                ctx.setStrokeStyle(point[0].color);
+            }
+            for (let i = 1; i < point.length; i++) {
+                ctx.bezierCurveTo(point[i].c1x, point[i].c1y, point[i].c2x, point[i].c2y, point[i].ex, point[i].ey);
+            }
+            ctx.stroke();
+            if (undefined != is_fill) {
+                ctx.fill(); //填充图形 ( 后绘制的图形会覆盖前面的图形, 绘制时注意先后顺序 )
+            }
+            ctx.draw(true)
+        }
+        initCanvas(){
+            //获得Canvas的上下文
+            this.content = wx.createCanvasContext('firstCanvas')
+            //设置线的颜色
+            this.content.setStrokeStyle("#000")
+            //设置线的宽度
+            this.content.setLineWidth(2)
+            //设置线两端端点样式更加圆润
+            this.content.setLineCap('round')
+            //设置两条线连接处更加圆润
+            this.content.setLineJoin('round')
+        }
+        //绘制
+        createDraw() {
+            const point1 = this.touchs[0]
+            const point2 = this.touchs[1]
+            this.touchs.shift()
+            this.content.moveTo(point1.x, point1.y)
+            this.content.lineTo(point2.x, point2.y)
+            this.content.stroke()
+            this.content.draw(true)
+        }
+        saveImageTap(){
+            var _this = this;
+            wx.getImageInfo({
+                src: this.signImage,
+                success (res) {
+                    // 保存图片
+                    wx.saveImageToPhotosAlbum({
+                        filePath: res.path,
+                        success: (res)=> {
+                            wx.showToast({
+                                title: '保存相册成功！',
+                                icon: 'none',
+                                duration: 2000
+                            })
+                        },
+                        fail: (res)=> {
+                            console.log(res)
+                            if(  res.errMsg.indexOf('deny')!=-1||res.errMsg.indexOf('denied')!=-1 ){
+                                wx.showToast({
+                                    title: '保存相册失败，请设置权限！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                                _this.$broadcast('settingInit', 'scope.writePhotosAlbum')
+                            }else{
+                                wx.showToast({
+                                    title: '保存相册失败，请重试！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                            }
+                        }
+                    })
+                }
+            })
+        }
+        onLoad(){
+            
+        }
+        onShow(){
+            this.initCanvas();
+        }
+       
+    }
+</script> 
+
+<style lang="less">
+        page{
+            width: 100%;height: 100%;
+            background: #cccccc;
+        }
+        .container{
+            width: 100%;height: 100%;
+            display: flex;justify-content:center;align-items: center;
+        }
+        .canvas-box{
+            border: 4rpx dashed #e9e9e9;
+            width: 90%;height: 90%;
+            position: relative;
+        }
+        .firstCanvas{
+            width: 100%;height: 100%;display: block;
+            background: #fff
+        }
+        .clear-btn{
+            background: url(data:image/png;base64,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) center center no-repeat;
+            background-size: cover;
+            width: 50rpx;height: 50rpx;
+            position: absolute;bottom: 30rpx;right: 30rpx;
+        }
+        .create-box{
+            position: absolute;top: 30rpx;right: 30rpx;
+            width: 200rpx;height: 50rpx;
+            display: flex;justify-content: center;align-items: center;
+            .close-create-img{
+                background: url(data:image/png;base64,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) center center no-repeat;
+                background-size: cover;
+                width: 50rpx;height: 50rpx;
+                margin: 0 12rpx;
+            }
+            .is-create-img{
+                background: url(data:image/png;base64,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) center center no-repeat;
+                background-size: cover;
+                width: 50rpx;height: 50rpx;
+            }
+        }
+</style>

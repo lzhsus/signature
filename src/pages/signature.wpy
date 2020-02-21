@@ -1,0 +1,295 @@
+<template>
+    <view class="container" id="signature">
+        <view class="canvas-box">
+            <canvas class='firstCanvas' canvas-id="firstCanvas" disable-scroll='true' 
+                bindtouchmove='move' bindtouchstart='start'
+                bindtouchend='end' bindtouchcancel='cancel'
+                bindlongtap='tap' binderror='error'>
+            </canvas>
+            <cover-view class="hint" wx:if="{{firstTouch}}">请在指定范围内完成签名！</cover-view>
+
+            <cover-view class="create-box">
+                <cover-image @tap="closeClick" src="../static/111.png" />
+                <cover-image @tap="saveClick" src="../static/222.png" />
+                <cover-image @tap="colorClick" src="../static/333.png" />
+                <cover-image @tap="clearClick" src="../static/444.png" />
+            </cover-view>
+            <cover-view class="color-box" wx:if="{{colorShow}}">
+                <cover-view class="item" @tap="setColor('#000')"> </cover-view>
+                <cover-view class="item" @tap="setColor('red')"> </cover-view>
+                <cover-view class="item" @tap="setColor('yellow')"></cover-view>
+                <cover-view class="item" @tap="setColor('green')"></cover-view>
+                <cover-view class="item" @tap="setColor('orange')"></cover-view>
+            </cover-view>
+            <slider bindchange="bindchange" min="2" max="10" step="1" value="4" show-value/>
+
+        </view>
+        
+        <setting />
+    </view>
+</template>
+
+<script>
+    import wepy from 'wepy';
+    import setting from '../components/setting';
+	import appConfig from '../common/app_config'
+    // 配置
+    export default class Test extends wepy.page { 
+        data = {
+            pageShow:false,
+            signImage:'',
+            touchs:[],
+            lenghtNum:0,
+            cancel:'',
+            firstTouch:true,
+            content:null,
+            big:false,
+            systemInfo:{
+                w:'',
+                h:'0'
+            },
+            colorShow:false,
+            degreShow:false,
+            degreLine:4,
+            setColorLine :"#000"
+        } 
+         config ={
+            "pageOrientation": "landscape",
+            "resizable": true
+        }     
+        components = {
+            setting
+        }
+        events={} 
+        methods = {
+            // 画布的触摸移动开始手势响应
+            start (e) {
+                this.firstTouch = false;
+                // console.log("触摸开始" + e.changedTouches[0].x)
+                // console.log("触摸开始" + e.changedTouches[0].y)
+                //获取触摸开始的 x,y
+                if (this.touchs.length) return;
+                if (e.type != 'touchstart') return false;
+                let point = { x: e.changedTouches[0].x, y: e.changedTouches[0].y }
+                this.touchs.push(point);
+            },
+            // 画布的触摸移动手势响应
+            move(e) {
+                if (e.cancelable) {
+                    // 判断默认行为是否已经被禁用
+                    if (!e.defaultPrevented) {
+                        e.preventDefault();
+                    }
+                }
+                if (e.type != 'touchmove') return false;
+                let point = {x: e.touches[0].x, y: e.touches[0].y}
+                this.touchs.push(point)
+                if(this.touchs.length == 2) {
+                    this.createDraw()
+                }
+            },
+            // 画布的触摸移动结束手势响应
+            end(e){
+                if (e.type != 'touchend') return 0;
+                console.log("触摸结束"+e)
+                //清空轨迹数组
+                for (let i = 0 ;i < this.touchs.length;i++ ){
+                    this.touchs=[]
+                    this.$apply()
+                }
+            },
+            // 画布的触摸取消响应
+            cancel(e) {
+                this.cancel = "触摸取消"
+                console.log("触摸取消"+e);
+            },
+
+            // 画布的长按手势响应
+            tap(e) {
+                console.log("长按手势"+e)
+            },
+            error(e){
+                console.log("画布触摸错误"+e)
+            },
+            //清除操作
+            clearClick() {
+                this.big = !this.big
+                this.content.clearRect(0,0,this.systemInfo.w,this.systemInfo.h)
+                this.content.draw(true);
+                this.firstTouch = true;
+                this.$apply()
+                //清除画布
+            },
+            closeClick(){
+                wx.navigateBack({
+                    delta: 1 //返回的页面数，如果 delta 大于现有页面数，则返回到首页,
+                });
+            },
+            colorClick(){
+                this.colorShow = true;
+            },
+            setColor(color){
+                this.setColorLine = color;
+                this.initCanvas()
+                this.colorShow = false;
+                this.$apply()
+            },
+            bindchange(e){
+                console.log(e.detail.value)
+                this.degreLine = e.detail.value;
+                this.initCanvas()
+                this.$apply()
+            },
+            //保存图片
+            saveClick() {
+                var that = this
+                wx.canvasToTempFilePath({
+                    canvasId: 'firstCanvas',
+                    success:function(res) {
+                    //打印图片路径
+                        console.log('****'+res.tempFilePath)
+                        //设置保存的图片
+                        that.signImage = res.tempFilePath;
+                        appConfig.signImage = that.signImage 
+                        that.$apply()
+                        wx.navigateBack({
+                            delta: 1 //返回的页面数，如果 delta 大于现有页面数，则返回到首页,
+                        });
+                        
+                        // that.saveImageTap()
+                    }
+                })
+            }
+        }
+        initCanvas(){
+            this.content = wx.createCanvasContext('firstCanvas');//获得Canvas的上下文
+            this.content.strokeStyle = this.setColorLine; //设置线的颜色
+            this.content.lineWidth = this.degreLine; //设置线的宽度
+            this.content.lineCap = 'round'; //设置线两端端点样式更加圆润
+            this.content.lineJoin = 'round';  //设置两条线连接处更加圆润
+        }
+        //绘制
+        createDraw() {
+            const point1 = this.touchs[0]
+            const point2 = this.touchs[1]
+            this.touchs.shift()
+            this.content.moveTo(point1.x, point1.y)
+            this.content.lineTo(point2.x, point2.y)
+            this.content.stroke()
+            this.content.draw(true)
+        }
+        saveImageTap(){
+            var _this = this;
+            wx.getImageInfo({
+                src: this.signImage,
+                success (res) {
+                    // 保存图片
+                    wx.saveImageToPhotosAlbum({
+                        filePath: res.path,
+                        success: (res)=> {
+                            wx.showToast({
+                                title: '保存相册成功！',
+                                icon: 'none',
+                                duration: 2000
+                            })
+                        },
+                        fail: (res)=> {
+                            console.log(res)
+                            if(  res.errMsg.indexOf('deny')!=-1||res.errMsg.indexOf('denied')!=-1 ){
+                                wx.showToast({
+                                    title: '保存相册失败，请设置权限！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                                _this.$broadcast('settingInit', 'scope.writePhotosAlbum')
+                            }else{
+                                wx.showToast({
+                                    title: '保存相册失败，请重试！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                            }
+                        }
+                    })
+                }
+            })
+        }
+        onLoad(){
+            this.pageShow = true;
+            var _this=this
+            wx.getSystemInfo({
+                success (res) {
+                    _this.systemInfo.w = res.windowWidth;
+                    _this.systemInfo.h = res.windowWidth;
+                    _this.$apply();
+                }
+            })
+            this.$apply()
+        }
+        onShow(){
+            this.initCanvas();
+        }
+       
+    }
+</script> 
+
+<style lang="less">
+        page{
+            width: 100%;height: 100%;
+            background: #cccccc;
+        }
+        #signature{
+            width: 100%;height: 100%;
+            display: flex;justify-content:center;align-items: center;
+            .canvas-box{
+                border: 4rpx dashed #e9e9e9;
+                width: 90%;height: 80%;
+                .firstCanvas{
+                    width: 100%;height: 100%;display: block;
+                    background: #fff;
+                }
+                .hint{
+                    position: absolute;top: 50%;left: 50%;
+                    transform: translate(-50%,-50%);
+                    font-size: 26rpx;color: #cccc;
+                }
+                .create-box{
+                    position: absolute;top: 30rpx;right: 30rpx;z-index: 999;
+                    width: 200rpx;height: 50rpx;
+                    display: flex;justify-content: center;align-items: center;
+                    cover-image{
+                        width: 50rpx;height: 50rpx;
+                        margin: 0 12rpx;
+                    }
+                }
+                .color-box{
+                    position: absolute;top: 100rpx;right: 30rpx;z-index: 999;
+                    display: flex;justify-content: center;align-items: center;
+                    flex-direction: column;
+                    width: 50rpx;height: 200rpx;
+                    .item{
+                        &:nth-of-type(1){
+                            background-color: #000;
+                        }
+                        &:nth-of-type(2){
+                            background-color: red;
+                        }
+                        &:nth-of-type(3){
+                            background-color: yellow;
+                        }
+                        &:nth-of-type(4){
+                            background-color: green;
+                        }
+                        &:nth-of-type(5){
+                            background-color: orange;
+                        }
+                        border-radius: 50%;
+                        width: 50rpx;height: 50rpx;display: block;
+                        &::after{
+                            border: none;
+                        }
+                    }
+                }
+            }
+        }
+</style>

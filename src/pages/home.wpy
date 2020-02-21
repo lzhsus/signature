@@ -1,0 +1,101 @@
+<template>
+    <view class="container" id="signature-page">
+        <view class="canvas-box">
+            <signature></signature>
+        </view>
+        <setting />
+    </view>
+</template>
+
+<script>
+    import wepy from 'wepy';
+    import setting from '../components/setting';
+    import signature from '../components/signature'
+    // 配置
+    export default class signaturePage extends wepy.page { 
+        config={
+            "pageOrientation": "portrait"
+        }
+        data = {
+            signImage:'',
+        }      
+        components = {
+            signature
+        }
+        events={
+            'closeClick':(data)=>{
+                console.log('4444')
+            },
+            'createImgSuccess':(data)=>{
+                console.log('createImgSuccess',data);
+            }
+        } 
+        methods = {
+
+        }
+        saveImageTap(){
+            var _this = this;
+            wx.getImageInfo({
+                src: this.signImage,
+                success (res) {
+                    // 保存图片
+                    wx.saveImageToPhotosAlbum({
+                        filePath: res.path,
+                        success: (res)=> {
+                            wx.showToast({
+                                title: '保存相册成功！',
+                                icon: 'none',
+                                duration: 2000
+                            })
+                        },
+                        fail: (res)=> {
+                            console.log(res)
+                            if(  res.errMsg.indexOf('deny')!=-1||res.errMsg.indexOf('denied')!=-1 ){
+                                wx.showToast({
+                                    title: '保存相册失败，请设置权限！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                                _this.$broadcast('settingInit', 'scope.writePhotosAlbum')
+                            }else{
+                                wx.showToast({
+                                    title: '保存相册失败，请重试！',
+                                    icon: 'none',
+                                    duration: 2000
+                                })
+                            }
+                        }
+                    })
+                }
+            })
+        }
+        onLoad(){
+        }
+        onResize(res){
+            res.size.windowWidth // 新的显示区域宽度
+            res.size.windowHeight // 新的显示区域高度
+            console.log('onResize',res)
+        }
+        /**
+        * 生命周期函数--监听页面初次渲染完成
+        */
+        onReady() {
+
+        }
+        onShow(){
+            this.$broadcast('createTouchsCanvas');
+        }
+       
+    }
+</script> 
+
+<style lang="less">
+#signature-page{
+    width: 100%;height: 100%;
+    .canvas-box{
+        width: 100%;height: 200px;
+        background: #ffffff;
+    }
+}
+
+</style>
